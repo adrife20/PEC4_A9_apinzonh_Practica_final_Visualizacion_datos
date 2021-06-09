@@ -1,0 +1,233 @@
+---
+title: 'Visualización de Datos - PRA3 Selección Conjunto de Datos'
+author: 'Autor: Adrian Felipe Pinzon HUrtado'
+date: "abril 21 /2021"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+******
+# Introducción
+******
+
+# Desarrollo del trabajo
+## Carga de datos
+
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(quanteda)
+library(tm)
+library(ggplot2)
+library(topicmodels)
+library(tidytext)
+library(stringdist)
+library(sqldf)
+library(lattice)
+library(survival)
+library(Formula)
+library(Hmisc)
+library(lubridate)
+library(MASS)
+library(tidyverse)
+library(data.table)
+library(VIM)
+library(knitr)
+library(gridExtra)
+library(grid)
+library(kableExtra)
+library(magrittr)
+library(xtable)
+library(tidyr)
+library(hms)
+#install.packages("ggpubr")
+library(ggpubr)
+library(reshape2)
+#install.packages("PASWR")
+library(PASWR)
+library(car)
+#knitr::opts_chunk$set(echo = TRUE)
+library(GGally)
+library(faraway)
+library(epiR)
+library(ResourceSelection)
+library(ROCR)
+#library(xlsx)
+library(cluster)
+library(factoextra)
+library(datasets)
+
+```
+<b>Carga de datos </b>
+<p>Se escogió una data muy completa sobre certificación de ocupación (CO), que tiene variables cualitativas y cuantitativas, lo que permite una mejor exploración con algoritmos supervisados, no supervisadosy reglas de asociación. </p>
+
+<b>Sobre la data</b>
+<p>Un Certificado de Ocupación (CO) establece el uso legal de un edificio y / o el tipo de ocupación permitida. Los edificios nuevos deben tener un CO y los edificios existentes deben tener un CO actual o enmendado cuando hay un cambio en el uso, la salida o el tipo de ocupación. Nadie puede ocupar legalmente un edificio hasta que el Departamento haya emitido un Certificado de Ocupación o un Certificado de Ocupación Temporal. </p>
+
+<p> El Departamento emite un Certificado de Ocupación final cuando el trabajo terminado coincide con los planos presentados para nuevos edificios o modificaciones importantes. Emite una carta de cumplimiento para modificaciones menores a las propiedades. Estos documentos confirman que el trabajo cumple con todas las leyes aplicables, se ha completado todo el papeleo, se han pagado todas las tarifas adeudadas al Departamento, se han resuelto todas las violaciones relevantes y se han recibido todas las aprobaciones necesarias de otras agencias de la ciudad.</p>
+
+<p><b>Cuestiones a explorar:</b></p>
+<p>Las variables de unidades habitacionales propuestas y reales son interesantes para saber cómo se está haciendo esta certificación</p>
+<p>Adicionalmente, tambien cuenta con variables de latitud y longitud para realizar mapas, como se hizo con la base de datos del ejercicio de Procesos de Paz. Se puede analizar qué sectores o sitios tienen más unidades habitacionales y han cumplido papeleos o pagado todas las tarifas.</p>
+
+<p>Fuente:</p>
+
+https://data.cityofnewyork.us/Housing-Development/DOB-Certificate-Of-Occupancy/bs8b-p36w
+
+</p>
+```{r, echo=FALSE,message= FALSE, warning=FALSE}
+# como vamos a trabajar con JSON me instalo la librería
+# y la cargo en memoria
+
+library(jsonlite)
+mydata <- fromJSON("https://data.cityofnewyork.us/resource/bs8b-p36w.json")
+
+```
+```{r message= FALSE, warning=FALSE}
+
+mydata <- tibble::rowid_to_column(mydata, "Id")
+
+#head(mydata)
+
+```
+
+## Exploración de variables
+<p>
+```{r message= FALSE, warning=FALSE, echo=FALSE}
+#variables que deben ser numéricas:
+mydata$pr_dwelling_unit <- as.numeric(mydata$pr_dwelling_unit)
+mydata$ex_dwelling_unit <- as.numeric(mydata$ex_dwelling_unit)
+
+mydata$latitude <- as.numeric(mydata$latitude)
+mydata$longitude <- as.numeric(mydata$longitude)
+mydata$bin <- as.numeric(mydata$bin)
+mydata$council_district <- as.numeric(mydata$council_district)
+mydata$community_board <- as.numeric(mydata$community_board)
+
+#class(mydata$pr_dwelling_unit)
+#class(mydata$ex_dwelling_unit)
+#class(mydata$latitude)
+#class(mydata$longitude)
+
+#discretizamos
+summary(mydata)
+#summary(mydata$pr_dwelling_unit)
+#summary(mydata$ex_dwelling_unit)
+
+#mydata <- tibble::rowid_to_column(mydata, "ID")
+#head(mydata)
+```
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+index_NA_pr <-which(is.na(mydata$pr_dwelling_unit))
+index_NA_ex<-which(is.na(mydata$ex_dwelling_unit))
+index_NA_bin<-which(is.na(mydata$bin))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+colnames(mydata)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+mydata1 <- c()
+
+mydata1 <- data.frame(mydata)
+#head(dfNA)
+
+# S3 method for class 'data.frame', tomado de https://rdrr.io/cran/VIM/man/kNN.html
+mydata1 <- kNN(
+  mydata1,
+  variable = c("pr_dwelling_unit","ex_dwelling_unit","bin","council_district","community_board"),
+  #variable = colnames(mydata1),
+  #variable = c("pr_dwelling_unit"),
+  #variable = c("ex_dwelling_unit")
+  metric = NULL,
+  k = 5,
+  #dist_var = colnames(mydata1),
+  #dist_var = c("pr_dwelling_unit"),
+  dist_var = c("pr_dwelling_unit","ex_dwelling_unit","bin","council_district","community_board"),
+  weights = NULL,
+  numFun = median,
+  catFun = maxCat,
+  makeNA = NULL,
+  NAcond = NULL,
+  impNA = TRUE,
+  donorcond = NULL,
+  mixed = vector(),
+  mixed.constant = NULL,
+  trace = FALSE,
+#  imp_var = TRUE,
+#  imp_suffix = "Imputada",
+  addRandom = FALSE,
+  useImputedDist = TRUE,
+  weightDist = FALSE
+)
+
+###Valores perdidos:
+
+##Registros con Imputaciones realizadas para el campo ASA CORREO:
+#tabla_vpBPD <-df2[index_perdidos_ASACORREO,]
+PC1 <-mydata1[index_NA_pr,]
+#mydata1<- mydata1[,1:18]
+PC1 <- PC1[,1:34]
+kable(PC1, caption = "REGISTROS IMPUTADOS POR MEDIDA GOWER PARA NAs") %>%
+  kable_styling(latex_options=c("striped", "hold_position"), position = "left") %>%
+  column_spec(1, bold = T, color = "gray", background = "#EAF5F9") %>%
+  column_spec(2, bold = T, color = "gray", background = "#DAF5FD") %>%
+  column_spec(3, bold = T, color = "gray", background = "#CAF2FF") %>%
+  column_spec(4, bold = T, color = "gray", background = "#A1E9FF") %>%
+   column_spec(5, bold = T, color = "gray", background = "#18D6F3") %>%
+   column_spec(6, bold = T, color = "gray", background = "#0FD8F7") %>%
+   column_spec(7, bold = T, color = "gray", background = "#03DEFF") %>%
+   column_spec(8, bold = T, color = "gray", background = "#07C0DC") %>%
+   column_spec(9, bold = T, color = "gray", background = "#13B2CA") %>%
+   column_spec(10, bold = T, color = "gray", background = "#13B2CA") %>%
+   column_spec(11, bold = T, color = "gray", background = "#13B2CA") %>%
+   column_spec(12, bold = T, color = "gray", background = "#22A6BA") %>%
+   column_spec(13, bold = T, color = "gray", background = "#22A6BA") %>%
+   column_spec(14, bold = T, color = "gray", background = "#A1E9FF") %>%
+  column_spec(15, bold = T, color = "gray", background = "#22A6BA") %>%
+   column_spec(16, bold = T, color = "gray", background = "#22A6BA") %>%
+   column_spec(17, bold = T, color = "gray", background = "#A1E9FF") %>%
+     column_spec(18, bold = T, color = "gray", background = "#A1E9FF") %>%
+   column_spec(19, bold = T, color = "gray", background = "#A1E9FF") %>%
+   column_spec(20, bold = T, color = "gray", background = "#A1E9FF") %>%
+     column_spec(21, bold = T, color  = "gray", background = "#A1E9FF") %>%
+       column_spec(22, bold = T, color  = "gray", background = "#A1E9FF") %>%
+       column_spec(23, bold = T, color  = "gray", background = "#A1E9FF") %>%
+       column_spec(24, bold = T, color  = "gray", background = "#A1E9FF") %>%
+       column_spec(25, bold = T, color  = "gray", background = "#A1E9FF") %>%
+       column_spec(26, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(27, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(28, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(29, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(30, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(31, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(32, bold = T, color  = "gray", background = "#A1E9FF") %>%
+         column_spec(33, bold = T, color = "gray", background = "#A1E9FF") %>%
+         column_spec(34, bold = T, color = "white", background = "#BA2246") %>%
+           column_spec(35, bold = T, color = "white", background = "#BA2246") %>%
+     add_footnote(c("Se observa si esa fila tuvo variable imputada en columna roja"), notation = "symbol")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#install.packages("writexl")
+
+library(writexl)
+
+write_xlsx(x = PC1, path = "archivo_final2.xlsx", col_names = TRUE)
+
+write.csv(PC1,"archivo_final.csv",row.names=FALSE)
+
+
+```
+
+<br><br>
+Fuentes:<p>
+https://www.cienciadedatos.net/documentos/35_principal_component_analysis
+</p>
